@@ -53,7 +53,7 @@ def generator_loss(G_z, z, h_G_z, Int_f): #x_true = exp(h_z), x_pred <- G_z, x_i
     p_z = 1.0
     slogDJ = tf.reshape((logdet(jacobian(G_z, z))),(-1,dist_dim))
     #print(N, p_z, slogDJ)
-    D = 1.0/N*tf.reduce_sum(tf.log(p_z) - slogDJ - tf.log(p_z/tf.exp(slogDJ)+tf.exp(h_G_z)/Int_f),(0,))
+    D = 1.0/N*tf.reduce_sum(tf.log(p_z) - slogDJ - tf.log(p_z/tf.exp(slogDJ)+h_G_z/Int_f),(0,)) #
     return D
 
 ### DNN model
@@ -66,6 +66,7 @@ generative.add(tf.keras.layers.Dense(64, activation=tf.keras.activations.tanh))
 generative.add(tf.keras.layers.Dense(dist_dim, activation=tf.keras.activations.sigmoid, name='gen_outputs'))
 gen_out = generative.output
 gen_in  = generative.input
+gen_dst = 1/tf.reshape(tf.abs(jacobian(gen_out, gen_in)), (-1,dist_dim))
 
 regression = tf.keras.models.Sequential()
 regression.add(tf.keras.layers.Dense(64, input_shape=(dist_dim,), activation=tf.keras.activations.elu))
@@ -79,6 +80,13 @@ reg_out = regression.output
 reg_in  = regression.input
 regression.compile(loss=regression_loss,
                    optimizer="adam")
+
+#g_then_r = tf.keras.Sequential()
+#g_then_r.add(generative)
+#g_then_r.add(regression)
+#
+#gr_output = g_then_r.output
+#g_then_r.input = gen_in
 
 #regplotepoch = PlotEpoch()
 #fetches = [tf.assign(regplotepoch.var_input, regression.inputs, validate_shape=False),
@@ -110,32 +118,49 @@ def plot_reg(zs, correct, dist_dim):
 ### Test data
 target_function = doublegaussian
 
+#with tf.Session() as sess:
+    #unif = tf.distributions.Uniform(low=0.0, high=1.0)
+    #zs = tf.keras.backend.eval(tf.reshape(unif.sample((5120*2)),(-1,dist_dim)))
+    #sess.run(tf.global_variables_initializer())
+    #Ys = sess.run(gr_output, {gen_in: zs})
+    #plt.plot(zs, Ys, '.')
+    #plt.show()
+
+
 ### Train loop
 saver = tf.train.Saver()
-with tf.Session() as sess:
+se = tf.Session()
+with se as sess:
     #sess = tf_debug.LocalCLIDebugWrapperSession(sess)
     unif = tf.distributions.Uniform(low=0.0, high=1.0)
-    zs = tf.keras.backend.eval(tf.reshape(unif.sample((5120)),(-1,dist_dim)))
+    zs = tf.keras.backend.eval(tf.reshape(unif.sample((5120*2)),(-1,dist_dim)))
 
     sess.run(tf.global_variables_initializer())
     correct = tf.keras.backend.eval(target_function(zs))
-    h_G_z = reg_out #sess.run(reg_out, {reg_in: z})
-    integral_f = tf_integrate(tf.exp(reg_out))
+    h_G_z = tf.reshape(target_function(gen_out), (-1,dist_dim)) #sess.run(reg_out, {reg_in: z})
+    integral_f = tf_integrate(reg_out)
     gen_loss = generator_loss(gen_out, gen_in, h_G_z, integral_f)
-    gen_train = tf.train.GradientDescentOptimizer(0.005).minimize(gen_loss)
-    #linear_file = "linear.hdf5"
-    #if not os.path.isfile(linear_file):
-    #regression.fit(zs, zs, batch_size=int(5120/16), epochs=24, verbose=1)
-    #regression.save_weights(linear_file)
-    #else:
-    #regression.load_weights(linear_file)
-    #
-    #plot_reg(zs, zs, dist_dim)
-    #sess.run(gen_train, {gen_in: zs, reg_in: zs})
+    gen_train = tf.train.GradientDescentOptimizer(0.05).minimize(gen_loss, var_list=generative.variables)
+    linear_file = "linear.hdf5"
+    if not os.path.isfile(linear_file):
+        regression.fit(zs, zs, batch_size=int(5120/16), epochs=24, verbose=1)
+        regression.save_weights(linear_file)
+    else:
+        regression.load_weights(linear_file)
+
+    plot_reg(zs, zs, dist_dim)
+
+    print("make gen linear")
+    for i in range(1,100):
+        sess.run(gen_train, {gen_in: zs, reg_in: zs})
+
+    plt.plot(zs.flatten(), sess.run(gen_out, {gen_in: zs}).flatten(), '.')
+    plt.show()
+    plot_reg(zs, zs, dist_dim)
 
     reg_file = "reg.hdf5"
     if not os.path.isfile(reg_file):
-        regression.fit(zs, correct, batch_size=5120, epochs=12, verbose=1
+        regression.fit(zs, correct, batch_size=int(5120/2), epochs=8*12, verbose=1
                    ,callbacks=[reduce_lr])
         regression.save_weights(reg_file)
     else:
@@ -144,30 +169,24 @@ with tf.Session() as sess:
     batches = np.reshape(zs, (-1, 5120, dist_dim))
     for e in range(1,10):
         if e != 1:
-            newzs = tf.keras.backend.eval(tf.reshape(unif.sample((5120)),(-1,dist_dim)))
+            newzs = tf.keras.backend.eval(tf.reshape(unif.sample((5120*2)),(-1,dist_dim)))
             newzs = np.split(newzs, 2)
             zs = np.concatenate((sess.run(gen_out, {gen_in: newzs[0]}), newzs[1]))
             np.random.shuffle(zs)
             correct = tf.keras.backend.eval(target_function(zs))
-            regression.fit(zs, correct, batch_size=5120, epochs=8*16, verbose=1
+            plot_reg(zs, correct, dist_dim)
+            regression.fit(zs, correct, batch_size=int(5120/2), epochs=10, verbose=1
                    ,callbacks=[reduce_lr])
             plot_reg(zs, correct, dist_dim)
             batches = np.reshape(zs,(-1, 5120, dist_dim))
 
-        for i in range(1,100):
+        for i in range(1,200):
             z = batches[0]
-            #print(z)
-            #h_G_z = sess.run(reg_out, {reg_in: sess.run(gen_out, {gen_in: z})})
-            #h_G_z = reg_out #sess.run(reg_out, {reg_in: z})
-            #integral_f = integrate(sess.run(tf.exp(reg_out), {reg_in: z}))
-            #integral_f = tf_integrate(reg_out)
-            #print("h(G(Z)): ", h_G_z)
             print("integral f: ", sess.run(integral_f, {reg_in: z}))
-            #gen_loss = generator_loss(gen_out, gen_in, h_G_z, integral_f)
-            #gen_train = tf.train.GradientDescentOptimizer(0.05).minimize(gen_loss)
             _, loss = sess.run([gen_train, gen_loss], {gen_in: z, reg_in: z})
             print(i, ", loss: ", loss)
 
         print("epoch: ", e)
-        plt.plot(np.linspace(0,1,100), sess.run(gen_out, {gen_in: np.reshape(np.linspace(0,1,100),(-1,1))}), '.b')
+        plt.plot(np.linspace(0,1,100), sess.run(gen_dst, {gen_in: np.reshape(np.linspace(0,1,100),(-1,1))}), '.b', np.linspace(0,1,100), sess.run(gen_out, {gen_in: np.reshape(np.linspace(0,1,100),(-1,1))}), '.g', np.linspace(0,1,100), sess.run(target_function(np.reshape(np.linspace(0,1,100), (-1,1)))))
         plt.show()
+
