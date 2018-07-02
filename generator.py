@@ -66,7 +66,7 @@ generative.add(tf.keras.layers.Dense(64, activation=tf.keras.activations.sigmoid
 generative.add(tf.keras.layers.Dense(64, activation=tf.keras.activations.sigmoid))
 generative.add(tf.keras.layers.Dense(64, activation=tf.keras.activations.sigmoid))
 generative.add(tf.keras.layers.Dense(dist_dim, activation=tf.keras.activations.sigmoid, name='gen_outputs'))
-gen_out = generative.output*1.5
+gen_out = generative.output*2.0 -1.0
 gen_in  = generative.input
 #normal = tf.distributions.Normal(loc=0.5, scale=1.0)
 normal = tf.distributions.Uniform(-1.0, 1.0)
@@ -85,6 +85,7 @@ with tf.Session() as sess:
 
     #Prior
     zs = tf.keras.backend.eval(tf.reshape(normal.sample((5120*64)),(-1,dist_dim)))
+    zs_o = zs
     probs = tf.keras.backend.eval(normal.prob(zs))
     #                                                    vvvvvvv check combined pdf
     gen_zs, gen_zs_pdf = sess.run([gen_out, gen_dst], {gen_in: zs})
@@ -103,12 +104,12 @@ with tf.Session() as sess:
     gen_train = tf.train.AdamOptimizer(0.001).minimize(gen_loss)
     sess.run(tf.global_variables_initializer())
 
-    batches = zip(np.reshape(zs, (-1, 512, dist_dim)), np.reshape(probs, (-1, 512, dist_dim)))
     for e in range(1,40):
-        if False:
-            gen_zs, gen_zs_pdf = sess.run([gen_out, gen_dst], {gen_in: zs})
-            batches = np.reshape(gen_zs, (-1, 512, dist_dim))
-            p_z = np.reshape(gen_zs_pdf, (-1, 512, dist_dim))
+
+        if e > 19:
+            zs, probs = sess.run([gen_out, gen_dst], {gen_in: zs_o})
+
+        batches = zip(np.reshape(zs, (-1, 512, dist_dim)), np.reshape(probs, (-1, 512, dist_dim)))
         #print("epoch: ", e)
         #for z in batches:
         #    _, intloss = sess.run([int_train, int_loss], {gen_in: z})
