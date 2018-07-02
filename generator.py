@@ -94,8 +94,7 @@ with tf.Session() as sess:
 
     h_G_z = tf.reshape(f(gen_out),(-1, dist_dim)) #sess.run(reg_out, {reg_in: z})
     integral_f = tf.Variable(sess.run(tf_integrate(f(zs), normal.prob(zs))), trainable=False)
-    #p_z = normal.prob(gen_in)
-    p_z = tf.placeholder(tf.float32)
+    p_z = normal.prob(gen_in)
     #This is wrong
     integral_g = tf_integrate(gen_dst, gen_dst)
     gen_loss = generator_loss(gen_out, gen_in, h_G_z, integral_f, integral_g, p_z)
@@ -105,9 +104,6 @@ with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
 
     for e in range(1,40):
-
-        if e > 19:
-            zs, probs = sess.run([gen_out, gen_dst], {gen_in: zs_o})
 
         batches = zip(np.reshape(zs, (-1, 512, dist_dim)), np.reshape(probs, (-1, 512, dist_dim)))
         #print("epoch: ", e)
