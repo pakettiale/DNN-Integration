@@ -59,22 +59,22 @@ def triplegaussian(x):#(batch,dist_dim)
 
 
 generative = tf.keras.models.Sequential()
-generative.add(tf.keras.layers.Dense(128, input_shape=(dist_dim,), activation=tf.keras.activations.tanh))
-generative.add(tf.keras.layers.Dense(128, activation=tf.keras.activations.sigmoid))
-generative.add(tf.keras.layers.Dense(128, activation=tf.keras.activations.sigmoid))
-#generative.add(tf.keras.layers.Dense(64, activation=tf.keras.activations.sigmoid))
-#generative.add(tf.keras.layers.Dense(64, activation=tf.keras.activations.sigmoid))
-#generative.add(tf.keras.layers.Dense(64, activation=tf.keras.activations.sigmoid))
+generative.add(tf.keras.layers.Dense(64, input_shape=(dist_dim,), activation=tf.keras.activations.tanh))
+generative.add(tf.keras.layers.Dense(64, activation=tf.keras.activations.sigmoid))
+generative.add(tf.keras.layers.Dense(64, activation=tf.keras.activations.sigmoid))
+generative.add(tf.keras.layers.Dense(64, activation=tf.keras.activations.sigmoid))
+generative.add(tf.keras.layers.Dense(64, activation=tf.keras.activations.sigmoid))
+generative.add(tf.keras.layers.Dense(64, activation=tf.keras.activations.sigmoid))
 generative.add(tf.keras.layers.Dense(dist_dim, activation=tf.keras.activations.sigmoid, name='gen_outputs'))
-gen_out = generative.output #*10
+gen_out = generative.output*1.5
 gen_in  = generative.input
 #normal = tf.distributions.Normal(loc=0.5, scale=1.0)
-normal = tf.distributions.Uniform(0.0, 1.0)
+normal = tf.distributions.Uniform(-1.0, 1.0)
 gen_dst = normal.prob(gen_in)/tf.reshape(tf.abs(tf.linalg.det(jacobian(gen_out, gen_in))), (-1,dist_dim))
 
 
 #f = cauchy
-f = doublegaussian
+f = triplegaussian
 #def f(x):
 #    return tf.constant(1.0)*x+0.5
 
@@ -85,6 +85,7 @@ with tf.Session() as sess:
 
     #Prior
     zs = tf.keras.backend.eval(tf.reshape(normal.sample((5120*64)),(-1,dist_dim)))
+    probs = tf.keras.backend.eval(normal.prob(zs))
     #                                                    vvvvvvv check combined pdf
     gen_zs, gen_zs_pdf = sess.run([gen_out, gen_dst], {gen_in: zs})
     gen_zs = np.reshape(gen_zs, (-1, 512, dist_dim))
@@ -92,16 +93,17 @@ with tf.Session() as sess:
 
     h_G_z = tf.reshape(f(gen_out),(-1, dist_dim)) #sess.run(reg_out, {reg_in: z})
     integral_f = tf.Variable(sess.run(tf_integrate(f(zs), normal.prob(zs))), trainable=False)
-    p_z = normal.prob(gen_in)
+    #p_z = normal.prob(gen_in)
+    p_z = tf.placeholder(tf.float32)
     #This is wrong
-    integral_g = tf_integrate(gen_dst, normal.prob(gen_in))
+    integral_g = tf_integrate(gen_dst, gen_dst)
     gen_loss = generator_loss(gen_out, gen_in, h_G_z, integral_f, integral_g, p_z)
     int_loss = integral_loss(integral_g)
     int_train = tf.train.AdamOptimizer(0.01).minimize(int_loss)
     gen_train = tf.train.AdamOptimizer(0.001).minimize(gen_loss)
     sess.run(tf.global_variables_initializer())
 
-    batches = np.reshape(zs, (-1, 512, dist_dim))
+    batches = zip(np.reshape(zs, (-1, 512, dist_dim)), np.reshape(probs, (-1, 512, dist_dim)))
     for e in range(1,40):
         if False:
             gen_zs, gen_zs_pdf = sess.run([gen_out, gen_dst], {gen_in: zs})
@@ -113,13 +115,13 @@ with tf.Session() as sess:
         #print("Gen Integral before train: ", sess.run(integral_g, feed_dict={gen_in: batches[0]}))
         #print("With loss: ", intloss)
 
-        for z in batches:
-            _, loss = sess.run([gen_train, gen_loss], {gen_in: z})
+        for z, p in batches:
+            _, loss = sess.run([gen_train, gen_loss], {gen_in: z, p_z: p})
         print("loss: ", loss)
 
-        print("prior - G sampled integral: ", sess.run((integral_f-tf_integrate(f(gen_out), gen_dst)), {gen_in: z}))
+        print("prior - G sampled integral: ", sess.run((1.0-tf_integrate(f(gen_out), gen_dst)), {gen_in: z}))
 
-        print("Gen Integral after train: ", sess.run(integral_g, feed_dict={gen_in: batches[0]}))
+        #print("Gen Integral after train: ", sess.run(integral_g, feed_dict={gen_in: batches[0]}))
 
         x = zs
         x_ = sess.run(normal.cdf(x.flatten()))
