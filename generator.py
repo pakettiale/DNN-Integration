@@ -5,10 +5,9 @@ import matplotlib.pyplot as plt
 import math
 import os.path
 
-
 from losses import regression_loss, generator_loss, jacobian, integral_loss
+from custom_functions import custom_tanh, doublegaussian, triplegaussian, integrate, tf_integrate, cauchy
 from logdet import logdet
-
 
 ### Notes:
 ### Prior distribution Unif(-1, 1) seems to have better performance than Unif(0, 2)
@@ -18,45 +17,7 @@ from logdet import logdet
 ### Make gen_loss take p_z as a tf variable => allows generating nontrivial data for training
 ###    and better possibly better learning rate
 
-
 dist_dim = 1
-
-### Custom Functions
-def custom_tanh(x):
-    return tf.keras.activations.tanh(x)*0.7+x*0.3
-
-def integrate(samples, a=0, b=1):
-    return np.abs(b-a)/samples.size*np.sum(samples)
-
-# Importance sampling integral
-def tf_integrate(samples, importance, a=0.0, b=1.0):
-    return tf.abs(b-a)/tf.cast(tf.shape(samples)[0],tf.float32)*tf.reduce_sum(samples/importance)
-
-def cauchy(x):
-    Gamma = tf.constant(0.1)
-    return 1/math.pi*Gamma/((x-0.5)*(x-0.5)+Gamma*Gamma)
-
-def cauchy_cdf(x):
-    def f(x):
-        return 0.5+Gamma*np.tan(np.arctan(1/(2*Gamma))*math.erf(x/(np.sqrt(2))))
-    return list(map(f, x))
-
-def doublegaussian(x):#(batch,dist_dim)
-    x = tf.convert_to_tensor(x,dtype=tf.float32)
-    a = 0.1/math.sqrt(2)
-    n = dist_dim
-    c = 0.5*math.pow(1/(a*math.sqrt(2*math.pi)),n)
-    rest = tf.exp(-tf.reduce_sum((x-1/3)*(x-1/3)/(2*a*a),1))+tf.exp(-tf.reduce_sum((x-2/3)*(x-2/3)/(2*a*a),1))
-    return tf.reshape(c*rest,(-1,n))
-
-def triplegaussian(x):#(batch,dist_dim)
-    x = tf.convert_to_tensor(x,dtype=tf.float32)
-    a = 0.1/math.sqrt(2)
-    n = dist_dim
-    c = 1/3*math.pow(1/(a*math.sqrt(2*math.pi)),n)
-    rest = tf.exp(-tf.reduce_sum((x-1/4)**2/(2*a*a),1))+tf.exp(-tf.reduce_sum((x-2/4)**2/(2*a*a),1))+tf.exp(-tf.reduce_sum((x-3/4)**2/(2*a*a),1))
-    return tf.reshape(c*rest,(-1,n))
-
 
 generative = tf.keras.models.Sequential()
 generative.add(tf.keras.layers.Dense(64, input_shape=(dist_dim,), activation=tf.keras.activations.tanh))
