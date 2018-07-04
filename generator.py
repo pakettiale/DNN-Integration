@@ -68,8 +68,7 @@ hG_out = hG.output
 f = triplegaussian
 
 
-reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='loss', factor=0.2,
-                              patience=5, min_lr=0.001)
+reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='loss', factor=0.2, patience=5, min_lr=0.001)
 
 saver = tf.train.Saver()
 plot = True
@@ -107,10 +106,7 @@ with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     h.nn.load_weights(reg_file)
 
-    #This is wrong
-    integral_g = tf_integrate(gen_dst, gen_dst)
-
-    for e in range(1,10):
+    for e in range(1,15):
 
         batches = zip(np.reshape(zs, (-1, 2*512, dist_dim)), np.reshape(probs, (-1, 2*512, dist_dim)))
 
@@ -119,8 +115,6 @@ with tf.Session() as sess:
         print("epoch: ", e, " -- loss: ", loss)
 
         print("prior - G sampled integral: ", sess.run((1.0-tf_integrate(f(gen_out), gen_dst)), {gen_in: z}))
-
-        #print("Gen Integral after train: ", sess.run(integral_g, feed_dict={gen_in: batches[0]}))
 
         x = zs
         x_ = sess.run(normal.cdf(x.flatten()))
@@ -139,3 +133,32 @@ with tf.Session() as sess:
     n, x, _ = plt.hist(sess.run(gen_out, {gen_in: x}).flatten(), 50, density=0.00311)
     plt.plot(x, sess.run(f(np.reshape(x, (-1,1)))).flatten())
     plt.show()
+    for cycle in range(1,10):
+        zs = tf.keras.backend.eval(tf.reshape(normal.sample((5120*64)),(-1,dist_dim)))
+        probs = tf.keras.backend.eval(normal.prob(zs))
+        xs = np.random.uniform(0.0, 1.0, size=(20000,1))
+        correct = tf.keras.backend.eval(f(xs))
+        h.nn.fit(xs, correct, batch_size=int(5120/2), epochs=8*12, verbose=1
+              ,callbacks=[reduce_lr])
+        sess.run(integral_f.assign(sess.run(tf_integrate(tf.exp(h.output), 1), {h.input: xs})))
+        for e in range(1,15):
+
+            batches = zip(np.reshape(zs, (-1, 2*512, dist_dim)), np.reshape(probs, (-1, 2*512, dist_dim)))
+
+            for z, p in batches:
+                _, loss = sess.run([gen_train, gen_loss], {gen_in: z, p_z: p, hG_in: z})
+            print("epoch: ", e, " -- loss: ", loss)
+
+            print("prior - G sampled integral: ", sess.run((1.0-tf_integrate(f(gen_out), gen_dst)), {gen_in: z}))
+
+            x = zs
+            x_ = sess.run(normal.cdf(x.flatten()))
+            if plot and e%3 == 0:
+                plt.plot(
+                    #x_, sess.run(f(x)), ',k',
+                    x_, sess.run(gen_dst, {gen_in: x}), ',b',
+                    x_, sess.run(tf.exp(hG_out), {hG_in: x}), ',r',
+                    x_, sess.run(gen_out*4.0, {gen_in: x}), ',g')
+                plt.grid(True)
+                plt.axis([0, 1, 0.0, 4.5])
+                plt.show()
