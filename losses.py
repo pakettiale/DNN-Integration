@@ -23,7 +23,7 @@ def generator_loss(G_z, z, h_G_z, Int_f, p_z): #x_true = exp(h_z), x_pred <- G_z
     slogDJ = tf.reshape(logdet(jacobian(G_z, z)), (-1, 1))
     #print(N, p_z, slogDJ)
     #D = 1/N*tf.reduce_sum(-tf.log(tf.exp(h_G_z)/Int_f) + tf.log(p_z) - slogDJ, (0,))
-    D = tf.log(2.0) +  1.0/N*tf.reduce_sum((tf.log(p_z) - slogDJ - tf.log(p_z/tf.exp(slogDJ)+h_G_z/Int_f)),(0,)) #
+    D = tf.log(2.0) +  1.0/N*tf.reduce_sum((tf.log(p_z) - slogDJ - tf.log(p_z/tf.exp(slogDJ)+tf.exp(h_G_z)/Int_f)),(0,)) #
     return D
 
 

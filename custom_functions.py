@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import math
+import matplotlib.pyplot as plt
 
 ### Custom Functions
 def custom_tanh(x):
@@ -39,3 +40,20 @@ def triplegaussian(x):#(batch,dist_dim)
     c = 1/3*tf.pow(1/(a*math.sqrt(2*math.pi)),dim_f)
     rest = tf.exp(-tf.reduce_sum((x-1/4)**2/(2*a*a),1))+tf.exp(-tf.reduce_sum((x-2/4)**2/(2*a*a),1))+tf.exp(-tf.reduce_sum((x-3/4)**2/(2*a*a),1))
     return tf.reshape(c*rest,(-1,dim))
+
+
+def plot_reg(zs, correct, dist_dim):
+    if dist_dim == 1:
+        data = zs.flatten()
+        plt.subplot(211)
+        plt.plot(data[0:1000], correct[0:1000], ',g', data, np.exp(regression.predict(zs).flatten()), ',r')
+        plt.subplot(212)
+        plt.semilogy(data[0:1000], correct[0:1000], ',g', data, np.exp(regression.predict(zs).flatten()), ',r')
+        plt.show()
+
+    if dist_dim == 2:
+        from mpl_toolkits.mplot3d import Axes3D
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+        ax.scatter(data_f[:1000,0], data_f[:1000,1], zs=np.exp(regression.predict(data_f).flatten())[:1000])
+        plt.show()
