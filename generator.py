@@ -102,8 +102,10 @@ with tf.Session() as sess:
     p_z = normal.prob(gen_in)
 
     gen_loss = generator_loss(gen_out, gen_in, h_G_z, integral_f, p_z)
-    gen_train = tf.train.AdamOptimizer(0.001).minimize(gen_loss, var_list=gen_vars)
+    gen_opt = tf.train.AdamOptimizer(0.001)
+    gen_train = gen_opt.minimize(gen_loss, var_list=[gen_vars])
     sess.run(tf.global_variables_initializer())
+    h.nn.load_weights(reg_file)
 
     #This is wrong
     integral_g = tf_integrate(gen_dst, gen_dst)
