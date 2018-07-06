@@ -47,14 +47,16 @@ class GenerativeDNN():
         self.nn = nn
         self.output = self.nn.output
         self.input = self.nn.input
-        self.density = self.prior.prob(self.input)/tf.reshape(tf.abs(tf.linalg.det(jacobian(self.output, self.input))), (-1, self.dim))
+        self.abs_grad = tf.reshape(tf.abs(tf.linalg.det(jacobian(self.output, self.input))), (-1, self.dim))
+        self.density = self.prior.prob(self.input)/self.abs_grad
 
 h = RegressiveDNN(1)
 
 normal = tf.distributions.Uniform(-1.0, 1.0)
-generative = GenerativeDNN(1, normal, tf.keras.activations.tanh)
+generative = GenerativeDNN(1, normal, custom_tanh)# tf.keras.activations.tanh)
 gen_out = generative.output
 gen_in  = generative.input
+gen_grad = generative.abs_grad
 gen_dst = generative.density
 
 gen_vars = generative.nn.variables
@@ -108,7 +110,7 @@ with tf.Session() as sess:
 
     for e in range(1,15):
 
-        batches = zip(np.reshape(zs, (-1, 2*512, dist_dim)), np.reshape(probs, (-1, 2*512, dist_dim)))
+        batches = zip(np.reshape(zs, (-1, 4*512, dist_dim)), np.reshape(probs, (-1, 4*512, dist_dim)))
 
         for z, p in batches:
             _, loss = sess.run([gen_train, gen_loss], {gen_in: z, p_z: p, hG_in: z})
@@ -118,16 +120,15 @@ with tf.Session() as sess:
 
         x = zs
         x_ = sess.run(normal.cdf(x.flatten()))
-        if plot and e%3 == 0:
+        if plot and e%10 == 0:
             plt.plot(
                 #x_, sess.run(f(x)), ',k',
                 x_, sess.run(gen_dst, {gen_in: x}), ',b',
+                x_, sess.run(gen_grad, {gen_in: x}), ',k',
                 x_, sess.run(tf.exp(hG_out), {hG_in: x}), ',r',
                 x_, sess.run(gen_out*4.0, {gen_in: x}), ',g')
             plt.grid(True)
             plt.axis([0, 1, 0.0, 4.5])
-            plt.show()
-            plt.plot(xs.flatten(), np.exp(h.nn.predict(xs).flatten()), ',r')
             plt.show()
 
     n, x, _ = plt.hist(sess.run(gen_out, {gen_in: x}).flatten(), 50, density=0.00311)
@@ -136,14 +137,18 @@ with tf.Session() as sess:
     for cycle in range(1,10):
         zs = tf.keras.backend.eval(tf.reshape(normal.sample((5120*64)),(-1,dist_dim)))
         probs = tf.keras.backend.eval(normal.prob(zs))
-        xs = np.random.uniform(0.0, 1.0, size=(20000,1))
+        #xs = np.random.uniform(0.0, 1.0, size=(20000,1))
+        xs = sess.run(gen_out, {gen_in: zs})
         correct = tf.keras.backend.eval(f(xs))
-        h.nn.fit(xs, correct, batch_size=int(5120/2), epochs=8*12, verbose=1
+        h.nn.fit(xs, correct, batch_size=int(5120/2), epochs=6, verbose=1
               ,callbacks=[reduce_lr])
+        plt.plot(xs.flatten(), np.exp(h.nn.predict(xs).flatten()), ',g', xs.flatten(), correct.flatten())
+        plt.show()
         sess.run(integral_f.assign(sess.run(tf_integrate(tf.exp(h.output), 1), {h.input: xs})))
+        print("integral_f: ", sess.run(integral_f))
         for e in range(1,15):
 
-            batches = zip(np.reshape(zs, (-1, 2*512, dist_dim)), np.reshape(probs, (-1, 2*512, dist_dim)))
+            batches = zip(np.reshape(zs, (-1, 10*512, dist_dim)), np.reshape(probs, (-1, 10*512, dist_dim)))
 
             for z, p in batches:
                 _, loss = sess.run([gen_train, gen_loss], {gen_in: z, p_z: p, hG_in: z})
@@ -157,6 +162,7 @@ with tf.Session() as sess:
                 plt.plot(
                     #x_, sess.run(f(x)), ',k',
                     x_, sess.run(gen_dst, {gen_in: x}), ',b',
+                    x_, sess.run(gen_grad, {gen_in: x}), ',k',
                     x_, sess.run(tf.exp(hG_out), {hG_in: x}), ',r',
                     x_, sess.run(gen_out*4.0, {gen_in: x}), ',g')
                 plt.grid(True)
