@@ -17,6 +17,7 @@ def regression_loss(x_true, x_pred): #x_true <- f(x), x_pred <- h(G(z))
 
 # G_z = generative,       h_G_z = generative_then_regression
 # z   = generative input, Int_f = integral of exp(h)?
+
 def generator_loss(G_z, z, h_G_z, Int_f, p_z): #x_true = exp(h_z), x_pred <- G_z, x_in = z,
     dim = tf.shape(z)[1]
     N = tf.cast(tf.shape(z)[0], tf.float32)

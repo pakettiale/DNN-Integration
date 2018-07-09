@@ -53,7 +53,7 @@ class GenerativeDNN():
 h = RegressiveDNN(1)
 
 normal = tf.distributions.Uniform(-1.0, 1.0)
-generative = GenerativeDNN(1, normal, custom_tanh)# tf.keras.activations.tanh)
+generative = GenerativeDNN(1, normal, custom_tanh)# tf.keras.activations.tanh)#
 gen_out = generative.output
 gen_in  = generative.input
 gen_grad = generative.abs_grad
@@ -103,16 +103,23 @@ with tf.Session() as sess:
     p_z = normal.prob(gen_in)
 
     gen_loss = generator_loss(gen_out, gen_in, h_G_z, integral_f, p_z)
-    gen_opt = tf.train.AdamOptimizer(0.001)
-    gen_train = gen_opt.minimize(gen_loss, var_list=[gen_vars])
+    gen_opt = tf.train.AdamOptimizer(0.0001)
+    #gen_opt = tf.train.GradientDescentOptimizer(0.001)
+    grads_and_vars = gen_opt.compute_gradients(gen_loss, var_list=[gen_vars])
+    grads = [x[0] for x in grads_and_vars]
+    vars  = [x[1] for x in grads_and_vars]
+    grads, grad_norm = tf.clip_by_global_norm(grads, 2)
+    gen_train = gen_opt.apply_gradients(zip(grads, vars))
     sess.run(tf.global_variables_initializer())
     h.nn.load_weights(reg_file)
 
-    for e in range(1,15):
+    for e in range(1,50):
 
         batches = zip(np.reshape(zs, (-1, 4*512, dist_dim)), np.reshape(probs, (-1, 4*512, dist_dim)))
 
         for z, p in batches:
+            #gradients = sess.run(grads, {gen_in: z, p_z: p, hG_in: z})
+            #print(gradients)
             _, loss = sess.run([gen_train, gen_loss], {gen_in: z, p_z: p, hG_in: z})
         print("epoch: ", e, " -- loss: ", loss)
 
@@ -142,7 +149,7 @@ with tf.Session() as sess:
         correct = tf.keras.backend.eval(f(xs))
         h.nn.fit(xs, correct, batch_size=int(5120/2), epochs=6, verbose=1
               ,callbacks=[reduce_lr])
-        plt.plot(xs.flatten(), np.exp(h.nn.predict(xs).flatten()), ',g', xs.flatten(), correct.flatten())
+        plt.plot(xs.flatten(), np.exp(h.nn.predict(xs).flatten()), ',r', xs.flatten(), correct.flatten(), ',g')
         plt.show()
         sess.run(integral_f.assign(sess.run(tf_integrate(tf.exp(h.output), 1), {h.input: xs})))
         print("integral_f: ", sess.run(integral_f))
