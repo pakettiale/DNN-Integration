@@ -39,7 +39,7 @@ def triplegaussian(x):#(batch,dist_dim)
     dim_f = tf.cast(dim, tf.float32)
     c = 1/3*tf.pow(1/(a*math.sqrt(2*math.pi)),dim_f)
     rest = tf.exp(-tf.reduce_sum((x-1/4)**2/(2*a*a),1))+tf.exp(-tf.reduce_sum((x-2/4)**2/(2*a*a),1))+tf.exp(-tf.reduce_sum((x-3/4)**2/(2*a*a),1))
-    return tf.reshape(c*rest,(-1,dim))
+    return tf.reshape(c*rest,(-1,1))
 
 
 def plot_reg(zs, correct, dist_dim):
