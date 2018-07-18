@@ -8,52 +8,14 @@ import os.path
 from losses import regression_loss, generator_loss, jacobian, integral_loss
 from custom_functions import custom_tanh, doublegaussian, triplegaussian, integrate, tf_integrate, cauchy
 from logdet import logdet
+from models import GenerativeDNN, RegressiveDNN
 
 dist_dim = 2
-
-class RegressiveDNN():
-    def __init__(self, dim):
-        self.dim = dim
-        nn = tf.keras.models.Sequential()
-        nn.add(tf.keras.layers.Dense(64, input_shape=(self.dim,), activation=tf.keras.activations.elu))
-        nn.add(tf.keras.layers.Dense(64, activation=tf.keras.activations.elu))
-        nn.add(tf.keras.layers.Dense(64, activation=tf.keras.activations.elu))
-        nn.add(tf.keras.layers.Dense(64, activation=tf.keras.activations.elu))
-        nn.add(tf.keras.layers.Dense(64, activation=tf.keras.activations.elu))
-        nn.add(tf.keras.layers.Dense(1, activation=tf.keras.activations.linear))
-
-        self.nn = nn
-        self.output = nn.output
-        self.input  = nn.input
-        self.nn.compile(loss=regression_loss,
-                   optimizer="adam")
-
-class GenerativeDNN():
-    def __init__(self, dim, prior, activation):
-
-        self.dim = dim
-        self.activation = activation
-
-        nn = tf.keras.models.Sequential()
-        nn.add(tf.keras.layers.Dense(64, input_shape=(self.dim,), activation=self.activation))
-        nn.add(tf.keras.layers.Dense(64, activation=self.activation))
-        nn.add(tf.keras.layers.Dense(64, activation=self.activation))
-        nn.add(tf.keras.layers.Dense(64, activation=self.activation))
-        nn.add(tf.keras.layers.Dense(64, activation=self.activation))
-        nn.add(tf.keras.layers.Dense(64, activation=self.activation))
-        nn.add(tf.keras.layers.Dense(self.dim, activation=tf.keras.activations.sigmoid, name='gen_outputs'))
-
-        self.prior = prior
-        self.nn = nn
-        self.output = self.nn.output
-        self.input = self.nn.input
-        self.abs_grad = tf.reshape(tf.abs(tf.linalg.det(jacobian(self.output, self.input))), (-1, 1))
-        self.density = tf.reduce_prod(self.prior.prob(self.input), (-1,), keepdims=True)/self.abs_grad
 
 h = RegressiveDNN(dist_dim)
 
 normal = tf.distributions.Uniform(-1.0, 1.0)
-generative = GenerativeDNN(dist_dim, normal, tf.keras.activations.tanh)#custom_tanh)#
+generative = GenerativeDNN(dist_dim, normal, custom_tanh)#tf.keras.activations.tanh)#
 gen_out = generative.output
 gen_in  = generative.input
 gen_grad = generative.abs_grad
@@ -67,7 +29,7 @@ hG.add(h.nn)
 hG_in = hG.input
 hG_out = hG.output
 
-f = triplegaussian
+f = doublegaussian
 
 
 reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='loss', factor=0.2, patience=5, min_lr=0.0001)
@@ -105,7 +67,7 @@ with tf.Session() as sess:
     p_z = tf.reduce_prod(normal.prob(gen_in), (-1), keepdims=True)
 
     gen_loss = generator_loss(gen_out, gen_in, h_G_z, integral_f, p_z)
-    gen_opt = tf.train.AdamOptimizer(0.0005, 0.5)
+    gen_opt = tf.train.AdamOptimizer(0.0005, 0.9)
     #gen_opt = tf.train.GradientDescentOptimizer(0.001)
     grads_and_vars = gen_opt.compute_gradients(gen_loss, var_list=[gen_vars])
     grads = [x[0] for x in grads_and_vars]
@@ -168,6 +130,7 @@ with tf.Session() as sess:
 
         sess.run(integral_f.assign(sess.run(tf_integrate(tf.exp(hG_out), gen_dst), {hG_in: zs, gen_in: zs})))
         print("integral_f: ", sess.run(integral_f))
+        losses = np.zeros((3,))+100000.0
         for e in range(1,45):
 
             batches = zip(np.reshape(zs, (-1, 10*512, dist_dim)), np.reshape(probs, (-1, 10*512, dist_dim)))
@@ -176,7 +139,13 @@ with tf.Session() as sess:
                 _, loss = sess.run([gen_train, gen_loss], {gen_in: z, hG_in: z})
             print("epoch: ", e, " -- loss: ", loss)
 
-            print("prior - G sampled integral: ", sess.run((1.0-tf_integrate(f(gen_out), gen_dst)), {gen_in: z}))
+            if loss > np.max(losses):
+                break
+            else:
+                np.roll(losses, 1)
+                losses[0] = loss
+
+            #print("prior - G sampled integral: ", sess.run((1.0-tf_integrate(f(gen_out), gen_dst)), {gen_in: z}))
 
             x = zs
             x_ = sess.run(normal.cdf(x.flatten()))
