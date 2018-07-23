@@ -6,7 +6,7 @@ import math
 import os.path
 
 from losses import regression_loss, generator_loss, jacobian, integral_loss
-from custom_functions import custom_tanh, doublegaussian, triplegaussian, integrate, tf_integrate, cauchy
+from custom_functions import custom_tanh, doublegaussian, triplegaussian, integrate, tf_integrate, cauchy, rosenbrock
 from logdet import logdet
 from models import GenerativeDNN, RegressiveDNN
 
@@ -29,11 +29,11 @@ hG.add(h.nn)
 hG_in = hG.input
 hG_out = hG.output
 
-f = doublegaussian
+f = triplegaussian
 
 
-reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='loss', factor=0.2, patience=5, min_lr=0.0001)
-early_stopping = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=3)
+reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='loss', factor=0.2, patience=3, min_lr=0.0001)
+early_stopping = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=5)
 
 saver = tf.train.Saver()
 plot = False
@@ -47,7 +47,7 @@ with tf.Session() as sess:
     probs = tf.keras.backend.eval(tf.reduce_prod(normal.prob(zs), (-1,), keepdims=True))
     reg_file = "reg.hdf5"
     if not os.path.isfile(reg_file):
-        h.nn.fit(xs, correct, batch_size=int(5120), epochs=30*12, verbose=1
+        h.nn.fit(xs, correct, batch_size=int(5120), epochs=30, verbose=1
               ,callbacks=[reduce_lr, early_stopping])
         h.nn.save_weights(reg_file)
     else:
@@ -63,7 +63,6 @@ with tf.Session() as sess:
     h_G_z = hG_out #sess.run(reg_out, {reg_in: z})
     integral_f = tf.Variable(sess.run(tf_integrate(tf.exp(h.output), 1.0), {h.input: xs}), trainable=False)
     print(tf.keras.backend.eval(integral_f))
-    integral_h_G_z = tf_integrate(h.output, 1.0)
     p_z = tf.reduce_prod(normal.prob(gen_in), (-1), keepdims=True)
 
     gen_loss = generator_loss(gen_out, gen_in, h_G_z, integral_f, p_z)
@@ -102,19 +101,21 @@ with tf.Session() as sess:
             plt.axis([0, 1, 0.0, 4.5])
             plt.show()
 
-    for cycle in range(1,10):
+    generative.nn.save_weights("saved_models/gen1.hdf5")
+    for cycle in range(1,3):
         if dist_dim == 2:
             xs = np.arange(-1.0, 1.0, 0.025)
             ys = np.arange(-1.0, 1.0, 0.025)
             X, Y = np.meshgrid(xs, ys)
-            Z = np.reshape(sess.run(gen_dst, {gen_in: np.array(list(zip(X.flatten(), Y.flatten()))).reshape([-1,2])}), (80,80))
-            plt.contour(X, Y, Z)
+            #Z = np.reshape(sess.run(gen_dst, {gen_in: np.array(list(zip(X.flatten(), Y.flatten()))).reshape([-1,2])}), (80,80))
+            #plt.contour(X, Y, Z)
+            Z = sess.run(gen_out, {gen_in: np.array(list(zip(X.flatten(), Y.flatten())))})
+            plt.hist2d(Z[:,0], Z[:,1], bins=40)
             plt.show()
-            plt.matshow(Z)
+        else:
+            n, x, _ = plt.hist(sess.run(gen_out, {gen_in: x}), 50, density=0.00311)
+            plt.plot(x, sess.run(f(np.reshape(x, (-1,1)))).flatten())
             plt.show()
-        n, x, _ = plt.hist(sess.run(gen_out, {gen_in: x}), 50, density=0.00311)
-        plt.plot(x, sess.run(f(np.reshape(x, (-1,1)))).flatten())
-        plt.show()
         zs = tf.keras.backend.eval(tf.reshape(normal.sample((5120*64)),(-1,dist_dim)))
         probs = tf.keras.backend.eval(normal.prob(zs))
         #xs = np.random.uniform(0.0, 1.0, size=(20000,1))
@@ -129,7 +130,8 @@ with tf.Session() as sess:
         plt.show()
 
         sess.run(integral_f.assign(sess.run(tf_integrate(tf.exp(hG_out), gen_dst), {hG_in: zs, gen_in: zs})))
-        print("integral_f: ", sess.run(integral_f))
+        print("integral_hG: ", sess.run(integral_f))
+        print("integral_f:  ", sess.run(tf_integrate(f(gen_out), gen_dst), {gen_in: zs}))
         losses = np.zeros((3,))+100000.0
         for e in range(1,45):
 
@@ -159,3 +161,5 @@ with tf.Session() as sess:
                 plt.grid(True)
                 plt.axis([0, 1, 0.0, 4.5])
                 plt.show()
+
+        generative.nn.save_weights("saved_models/gen" + str(cycle+1) + ".hdf5")

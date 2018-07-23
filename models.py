@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+from losses import regression_loss, jacobian
 
 class RegressiveDNN():
     def __init__(self, dim):

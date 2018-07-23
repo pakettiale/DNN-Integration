@@ -18,9 +18,9 @@ def logdet_grad(op, grad):
 # define logdet by calling numpy.linalg.slogdet
 def logdet(a, name = None):
     with tf.name_scope(name, 'LogDet', [a]) as name:
-        res = py_func(lambda a: np.linalg.slogdet(a)[1], 
-                      [a], 
-                      tf.float32, 
-                      name=name, 
+        res = py_func(lambda a: np.linalg.slogdet(a)[1],
+                      [a],
+                      tf.float32,
+                      name=name,
                       grad=logdet_grad) # set the gradient
         return res
