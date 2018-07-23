@@ -8,11 +8,13 @@ def custom_tanh(x):
     return tf.keras.activations.tanh(x)*0.7+x*0.3
 
 def integrate(samples, importance=1.0, a=0, b=1):
-    return np.abs(b-a)/samples.shape[0]*np.sum(samples/importance)
+    dim = samples.shape[1]
+    return np.abs(b-a)**dim/samples.shape[0]*np.sum(samples/importance)
 
 # Importance sampling integral
 def tf_integrate(samples, importance, a=0.0, b=1.0):
-    return tf.abs(b-a)/tf.cast(tf.shape(samples)[0],tf.float32)*tf.reduce_sum(samples/importance)
+    dim = tf.shape(samples)[1]
+    return tf.abs(b-a)**dim/tf.cast(tf.shape(samples)[0],tf.float32)*tf.reduce_sum(samples/importance)
 
 def cauchy(x):
     Gamma = tf.constant(0.1)
