@@ -8,7 +8,7 @@ import os.path
 from losses import regression_loss, generator_loss, jacobian, integral_loss
 from custom_functions import custom_tanh, doublegaussian, triplegaussian, integrate, tf_integrate, cauchy, rosenbrock
 from logdet import logdet
-from models import GenerativeDNN, RegressiveDNN
+from models import GenerativeDNN, RegressiveDNN, GenerativeDNNCustom
 
 dist_dim = 2
 
@@ -21,13 +21,11 @@ gen_in  = generative.input
 gen_grad = generative.abs_grad
 gen_dst = generative.density
 
+G = GenerativeDNNCustom(2, tf.distributions.Uniform(-1.0, 1.0), custom_tanh)
+
 gen_vars = generative.nn.variables
 
-hG = tf.keras.models.Sequential()
-hG.add(generative.nn)
-hG.add(h.nn)
-hG_in = hG.input
-hG_out = hG.output
+hG_out = h.nn(generative.output)
 
 f = triplegaussian
 
@@ -37,6 +35,7 @@ early_stopping = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=5)
 
 saver = tf.train.Saver()
 plot = False
+test = True
 with tf.Session() as sess:
     #sess = tf_debug.LocalCLIDebugWrapperSession(sess)
 
@@ -83,7 +82,7 @@ with tf.Session() as sess:
         for z, p in batches:
             #gradients = sess.run(grads, {gen_in: z, p_z: p, hG_in: z})
             #print(gradients)
-            _, loss = sess.run([gen_train, gen_loss], {gen_in: z, hG_in: z})
+            _, loss = sess.run([gen_train, gen_loss], {gen_in: z})
         print("epoch: ", e, " -- loss: ", loss)
 
         print("prior - G sampled integral: ", sess.run((1.0-tf_integrate(f(gen_out), gen_dst)), {gen_in: z}))
@@ -95,13 +94,24 @@ with tf.Session() as sess:
                 #x_, sess.run(f(x)), ',k',
                 x_, sess.run(gen_dst, {gen_in: x}), ',b',
                 x_, sess.run(gen_grad, {gen_in: x}), ',k',
-                x_, sess.run(tf.exp(hG_out), {hG_in: x}), ',r',
+                x_, sess.run(tf.exp(hG_out), {gen_in: x}), ',r',
                 x_, sess.run(gen_out*4.0, {gen_in: x}), ',g')
             plt.grid(True)
             plt.axis([0, 1, 0.0, 4.5])
             plt.show()
 
-    generative.nn.save_weights("saved_models/gen1.hdf5")
+    #generative.nn.save_weights("saved_models/gen1.hdf5")
+    saver.save(sess, "saved_models/gen1.hdf5")
+    if test:
+        dim = dist_dim
+        sample_size = 10000
+        test_prior = np.random.uniform(-1.0, 1.0, dim*sample_size).reshape((-1, dim))
+        points, weights = sess.run([gen_out, gen_dst], {gen_in: test_prior})
+        values = sess.run(f(points.reshape(-1, dim)))
+        values_squared = values**2
+        nn_integral = integrate(values, weights)
+        nn_error = np.sqrt(values_squared.mean() - values.mean()**2)/np.sqrt(sample_size)
+        print("NN integral:", nn_integral, ", ±", nn_error, ", rel_error:", nn_error/nn_integral*100, "%")
     for cycle in range(1,3):
         if dist_dim == 2:
             xs = np.arange(-1.0, 1.0, 0.025)
@@ -163,3 +173,13 @@ with tf.Session() as sess:
                 plt.show()
 
         generative.nn.save_weights("saved_models/gen" + str(cycle+1) + ".hdf5")
+        if test:
+            dim = dist_dim
+            sample_size = 10000
+            test_prior = np.random.uniform(-1.0, 1.0, dim*sample_size).reshape((-1, dim))
+            points, weights = sess.run([gen_out, gen_dst], {gen_in: test_prior})
+            values = sess.run(f(points.reshape(-1, dim)))
+            values_squared = values**2
+            nn_integral = integrate(values, weights)
+            nn_error = np.sqrt(values_squared.mean() - values.mean()**2)/np.sqrt(sample_size)
+            print("NN integral:", nn_integral, ", ±", nn_error, ", rel_error:", nn_error/nn_integral*100, "%")
