@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 ### Custom Functions
 def custom_tanh(x):
-    return tf.keras.activations.tanh(x)*0.7+x*0.3
+    return tf.tanh(x)*0.7+x*0.3
 
 def integrate(samples, importance=1.0, a=0, b=1):
     dim = samples.shape[1]
@@ -13,7 +13,7 @@ def integrate(samples, importance=1.0, a=0, b=1):
 
 # Importance sampling integral
 def tf_integrate(samples, importance, a=0.0, b=1.0):
-    dim = tf.shape(samples)[1]
+    dim = tf.cast(tf.shape(samples)[1], tf.float32)
     return tf.abs(b-a)**dim/tf.cast(tf.shape(samples)[0],tf.float32)*tf.reduce_sum(samples/importance)
 
 def cauchy(x):
