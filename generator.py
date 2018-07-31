@@ -15,15 +15,16 @@ dist_dim = 2
 h = RegressiveDNN(dist_dim)
 
 normal = tf.distributions.Uniform(-1.0, 1.0)
-generative = GenerativeDNN(dist_dim, normal, custom_tanh)#tf.keras.activations.tanh)#
+#generative = GenerativeDNN(dist_dim, normal, custom_tanh)#tf.keras.activations.tanh)#
+generative = GenerativeDNNCustom(2, tf.distributions.Uniform(-1.0, 1.0), custom_tanh)
 gen_out = generative.output
 gen_in  = generative.input
-gen_grad = generative.abs_grad
-gen_dst = generative.density
+gen_grad = generative.abs_grad()
+gen_dst = generative.density()
 
-G = GenerativeDNNCustom(2, tf.distributions.Uniform(-1.0, 1.0), custom_tanh)
+#G = GenerativeDNNCustom(2, tf.distributions.Uniform(-1.0, 1.0), custom_tanh)
 
-gen_vars = generative.nn.variables
+gen_vars = generative.variables()
 
 hG_out = h.nn(generative.output)
 
@@ -139,7 +140,7 @@ with tf.Session() as sess:
                 np.arange(0.0, 1.0, 0.01), tf.keras.backend.eval(f(diagonals)), '.g')
         plt.show()
 
-        sess.run(integral_f.assign(sess.run(tf_integrate(tf.exp(hG_out), gen_dst), {hG_in: zs, gen_in: zs})))
+        sess.run(integral_f.assign(sess.run(tf_integrate(tf.exp(hG_out), gen_dst), {gen_in: zs})))
         print("integral_hG: ", sess.run(integral_f))
         print("integral_f:  ", sess.run(tf_integrate(f(gen_out), gen_dst), {gen_in: zs}))
         losses = np.zeros((3,))+100000.0
@@ -148,7 +149,7 @@ with tf.Session() as sess:
             batches = zip(np.reshape(zs, (-1, 10*512, dist_dim)), np.reshape(probs, (-1, 10*512, dist_dim)))
 
             for z, p in batches:
-                _, loss = sess.run([gen_train, gen_loss], {gen_in: z, hG_in: z})
+                _, loss = sess.run([gen_train, gen_loss], {gen_in: z})
             print("epoch: ", e, " -- loss: ", loss)
 
             if loss > np.max(losses):
