@@ -10,17 +10,22 @@ from logdet import logdet
 from custom_functions import tf_integrate, triplegaussian, doublegaussian, custom_tanh, cauchy
 from models import *
 
-def main():
+def main(test_dim=2):
     with tf.Session() as sess:
-        G = GenerativeDNN(2, tf.distributions.Normal(0., 1.), custom_tanh)
+        G = GenerativeDNN(test_dim, tf.distributions.Normal(0., 1.), custom_tanh)
+        #G = GenerativeDNN(2, tf.distributions.Uniform(0., 1.), custom_tanh)
 
         G.set_target_function(G.prior.cdf)
         G.create_trainer(0.0001, KL=False)
         sess.run(tf.global_variables_initializer())
         G.train(40, 512*4, 30)
+        print(G.integrate_function(200000, tf.identity, use_exp=False))
+        print(G.integrate_function(200000, tf.identity, skip_gen=True, use_exp=False))
         saver = tf.train.Saver(G.variables())
         path = saver.save(sess, 'saved_models/linear')
         print(path)
+
+        return 0
 
         xs = G.sampler(1600)
         plt.scatter(xs[:,0], xs[:,1])
