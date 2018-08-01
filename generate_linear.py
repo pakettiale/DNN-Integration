@@ -19,8 +19,6 @@ def main(test_dim=2):
         G.create_trainer(0.0001, KL=False)
         sess.run(tf.global_variables_initializer())
         G.train(40, 512*4, 30)
-        print(G.integrate_function(200000, tf.identity, use_exp=False))
-        print(G.integrate_function(200000, tf.identity, skip_gen=True, use_exp=False))
         saver = tf.train.Saver(G.variables())
         path = saver.save(sess, 'saved_models/linear')
         print(path)

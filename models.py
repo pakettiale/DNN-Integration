@@ -33,6 +33,7 @@ class GenerativeDNN():
         self.prior = prior
         self.target_function = None
         self.optimize = None
+        self.density = self.prior_prob(self.input)/self.abs_grad()
         self.target_integral = tf.get_variable('no_train/integral', [], dtype=tf.float32, trainable=False)
 
     def set_target_function(self, target_function):
@@ -55,9 +56,6 @@ class GenerativeDNN():
     def abs_grad(self):
         return tf.reshape(tf.exp(logdet(jacobian(self.output, self.input))), (-1, 1))
 
-    def density(self):
-        return self.prior_prob(self.input)/self.abs_grad()
-
     def create_trainer(self, learning_rate=0.0001, beta=0.9, KL=True):
         optimizer = tf.train.AdamOptimizer(learning_rate, beta)
         grads_and_vars = optimizer.compute_gradients(self.loss(KL), var_list=self.variables())
@@ -66,15 +64,24 @@ class GenerativeDNN():
         grads, grad_norm = tf.clip_by_global_norm(grads, 2)
         self.optimize = optimizer.apply_gradients(zip(grads, vars))
 
-    def integrate_function(self, sample_size, function, skip_gen=False, use_exp=True):
-        session = tf.get_default_session()
+    def create_integral(self, sample_size, function, skip_gen=False, use_exp=True):
+        def exp(input):
+            if use_exp:
+                return tf.exp(input)
+            else:
+                return input
         if not skip_gen:
-            data = self.prior.sample([sample_size, self.dim]).eval()
-            integral = session.run(tf_integrate((tf.exp(function(self.output))), self.density(), self.dim), {self.input: data})
-        else:
-            data = tf.distributions.Uniform(0., 1.,).sample([sample_size, self.dim])
-            integral = session.run(tf_integrate((function(data)), 1.0, self.dim))
+            #data = self.prior.sample([sample_size, self.dim]).eval()
+            integral = tf_integrate((exp(function(self.output))), self.density, self.dim)
+        #else:
+            #data = tf.distributions.Uniform(0., 1.,).sample([sample_size, self.dim])
+            #integral = tf_integrate((function(tf.placeholder(tf.float32, name=))), 1.0, self.dim)
         return integral
+
+    def integrate(self, int_meth, sample_size):
+        sess = tf.get_default_session()
+        data = self.prior.sample([sample_size, self.dim]).eval()
+        return sess.run(int_meth, {self.input: data})
 
     def set_target_integral(self, value):
         session = tf.get_default_session()
