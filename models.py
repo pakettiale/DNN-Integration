@@ -70,7 +70,7 @@ class GenerativeDNN():
         session = tf.get_default_session()
         if not skip_gen:
             data = self.prior.sample([sample_size, self.dim]).eval()
-            integral = session.run(tf_integrate((function(self.output)), self.density(), self.dim), {self.input: data})
+            integral = session.run(tf_integrate((tf.exp(function(self.output))), self.density(), self.dim), {self.input: data})
         else:
             data = tf.distributions.Uniform(0., 1.,).sample([sample_size, self.dim])
             integral = session.run(tf_integrate((function(data)), 1.0, self.dim))
