@@ -27,7 +27,7 @@ class RegressiveDNN():
 class GenerativeDNN():
     #ToDO integral values, function bounds
     def __init__(self, dim, prior, activation, scope='gen'):
-        [self.output, self.input] = build_net(dim, 3, 32, activation, tf.sigmoid, scope)
+        [self.output, self.input] = build_net(dim, 5, 64, activation, tf.sigmoid, scope)
         self.scope = scope
         self.dim = dim
         self.prior = prior
@@ -67,18 +67,13 @@ class GenerativeDNN():
         self.optimize = optimizer.apply_gradients(zip(grads, vars))
 
     def integrate_function(self, sample_size, function, skip_gen=False, use_exp=True):
-        def exp(input):
-            if use_exp:
-                return tf.exp(input)
-            else:
-                return input
         session = tf.get_default_session()
         if not skip_gen:
-            data = tf.distributions.Uniform(0., 1.,).sample([sample_size, self.dim]).eval()
-            integral = session.run(tf_integrate(exp(function(self.output)), self.density()), {self.input: data})
+            data = self.prior.sample([sample_size, self.dim]).eval()
+            integral = session.run(tf_integrate((function(self.output)), self.density(), self.dim), {self.input: data})
         else:
-            data = self.prior.sample([sample_size, self.dim])
-            integral = session.run(tf_integrate(exp(function(data)), 1.0))
+            data = tf.distributions.Uniform(0., 1.,).sample([sample_size, self.dim])
+            integral = session.run(tf_integrate((function(data)), 1.0, self.dim))
         return integral
 
     def set_target_integral(self, value):
